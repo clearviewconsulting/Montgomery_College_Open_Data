@@ -1,0 +1,46 @@
+---
+title: "Montgomery College"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: cosmo
+    orientation: columns
+    vertical_layout: scroll
+    favicon: CVC_Favicon.png
+    navbar:
+      - { title: "Help", icon: "fa-life-ring", href: "https://cviewllc.com/contact-us/" }
+---
+
+```{r imports, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(kableExtra)
+library(lubridate) # for working with dates
+```
+
+```{r setup, include=FALSE}
+
+```
+
+```{js}
+$('.navbar-inverse').removeClass('navbar-inverse').addClass('navbar-default');
+```
+
+```{css}
+.chart-title {
+background-color: #3b3b3b;
+    color:#ffffff;
+    font-size: medium;
+}
+h4 {
+  color:#99999;
+  font-size: large;
+  font-weight: bold;
+}
+```
+
+
+```{r}
+# setting the knit formatting optjons
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+              fig.width = 10, fig.align = "center")
+```
