@@ -1,5 +1,5 @@
 ---
-title: "Montgomery College"
+title: "Montgomery County"
 output: 
   flexdashboard::flex_dashboard:
     theme: cosmo
@@ -15,10 +15,13 @@ library(flexdashboard)
 library(tidyverse)
 library(kableExtra)
 library(lubridate) # for working with dates
+library(scales)
 ```
 
 ```{r setup, include=FALSE}
-
+travel <- read.csv("./input/Employee_Travel_Data__Non-Local_.csv")
+enroll <- read.csv("./input/Montgomery_College_Enrollment_Data.csv")
+revenues <- read.csv("./input/Approved_Fiscal_Revenues.csv")
 ```
 
 ```{js}
@@ -44,3 +47,70 @@ h4 {
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
               fig.width = 10, fig.align = "center")
 ```
+
+Dashboard {data-orientation=rows}
+=====================================
+
+Sidebar {.sidebar}
+----------------------------
+
+### Summary
+Clearview Group performed an analysis of several open datasets from Montgomery County and Montgomery College. 
+
+Row 
+-----------------------------------------------------------------------
+###
+```{r}
+revenues %>% 
+  filter(Fiscal_Year == 2019) %>% 
+  summarise(Amount = paste(dollar(sum(Approved_Amount)/1e9),"B", sep = "")) %>% 
+  valueBox(caption = "2019 Gov. Revenue", icon = "fa-dollar", color = "grey")
+```
+
+###
+```{r}
+travel %>% 
+  filter(year(Travel.Start.Date) == 2019) %>% 
+  summarise(Amount = dollar(sum(Actual.Total.Expenses))) %>% 
+  valueBox(caption = "2019 Gov. Empl. Travel", icon = "fa-dollar", color = "green")
+```
+
+###
+```{r}
+enroll %>% 
+  filter(Fall.Term == 2015) %>% 
+  summarise(Total = format(n(),big.mark = ",")) %>% 
+  valueBox(caption = "2015 College Enrollment", icon = "user-graduate", color = "blue")
+```
+
+
+Summary {data-navmenu="Travel" data-orientation=rows}
+======================================================================
+
+Row
+----------------------------------
+
+###
+
+Summary {data-navmenu="Enrollment" data-orientation=rows}
+======================================================================
+
+Row
+----------------------------------
+
+###
+
+
+Summary {data-navmenu="Revenues" data-orientation=rows}
+======================================================================
+
+Row
+----------------------------------
+
+###
+
+
+
+
+
+
