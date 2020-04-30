@@ -16,12 +16,20 @@ library(tidyverse)
 library(kableExtra)
 library(lubridate) # for working with dates
 library(scales)
+library(leaflet)
+library(ggmap)
+library(RColorBrewer)
 ```
 
 ```{r setup, include=FALSE}
-travel <- read.csv("./input/Employee_Travel_Data__Non-Local_.csv")
-enroll <- read.csv("./input/Montgomery_College_Enrollment_Data.csv")
-revenues <- read.csv("./input/Approved_Fiscal_Revenues.csv")
+travel <- read.csv("./input/Employee_Travel_Data__Non-Local_.csv") %>% 
+  filter(year(Travel.Start.Date) == 2019)
+
+enroll <- read.csv("./input/Montgomery_College_Enrollment_Data.csv") %>% 
+    filter(Fall.Term == 2015)
+  
+revenues <- read.csv("./input/Approved_Fiscal_Revenues.csv") %>% 
+    filter(Fiscal_Year == 2019)
 ```
 
 ```{js}
@@ -61,8 +69,7 @@ Row
 -----------------------------------------------------------------------
 ###
 ```{r}
-revenues %>% 
-  filter(Fiscal_Year == 2019) %>% 
+revenues %>%
   summarise(Amount = paste(dollar(sum(Approved_Amount)/1e9),"B", sep = "")) %>% 
   valueBox(caption = "2019 Gov. Revenue", icon = "fa-dollar", color = "grey")
 ```
@@ -70,27 +77,81 @@ revenues %>%
 ###
 ```{r}
 travel %>% 
-  filter(year(Travel.Start.Date) == 2019) %>% 
   summarise(Amount = dollar(sum(Actual.Total.Expenses))) %>% 
-  valueBox(caption = "2019 Gov. Empl. Travel", icon = "fa-dollar", color = "green")
+  valueBox(caption = "2019 Gov. Empl. Travel (Non-Local)", icon = "fa-dollar", color = "green")
 ```
 
 ###
 ```{r}
-enroll %>% 
-  filter(Fall.Term == 2015) %>% 
+enroll %>%
   summarise(Total = format(n(),big.mark = ",")) %>% 
-  valueBox(caption = "2015 College Enrollment", icon = "user-graduate", color = "blue")
+  valueBox(caption = "2015 Montgomery College Enrollment", icon = "fa-user-graduate", color = "blue")
 ```
 
 
-Summary {data-navmenu="Travel" data-orientation=rows}
+Summary {data-navmenu="Travel"}
 ======================================================================
 
-Row
+Column {data-width=200}
+----------------------------------
+
+### Top 10 Departments
+```{r}
+travel %>% 
+  group_by(Department) %>% 
+  summarise(Amount = sum(Actual.Total.Expenses)) %>% 
+  arrange(-Amount) %>% 
+  top_n(10) %>% 
+  mutate(Amount = dollar(Amount)) %>% 
+  kable()
+  
+```
+
+Column {data-width=600}
 ----------------------------------
 
 ###
+```{r}
+Travel1 <- travel %>%
+            mutate(Dest = tolower(Destination.s.)) %>% 
+            mutate(Dest = gsub(";.*","",Dest)) %>% 
+            #mutate(Dest = gsub(" ,.*",",.*",Dest)) %>% 
+            group_by(Dest) %>% 
+            summarise(Total = sum(Actual.Total.Expenses)) %>% 
+            arrange(-Total)
+
+# Travel2 <- Travel1 %>% 
+#  separate(col = Dest, into = c("City", "State"), sep = "\\,") %>% 
+#   pull(City) %>% 
+#   geocode() 
+# 
+# Travel3 <- Travel2 %>%
+#   cbind(Travel1) %>% 
+#   rename(lng = lon)
+# 
+# write_csv(Travel3, "./input/Travel_Geocoded.csv")
+
+Travel3 <- read_csv("./input/Travel_Geocoded.csv")
+
+color_pal <- brewer.pal(5,"PuRd")
+
+Travel3 %>% 
+mutate(zscore = (Total - mean(Total))/sd(Total)) %>% 
+mutate(color = ifelse(zscore > 5, color_pal[5],
+                      ifelse(zscore <= 5 & zscore > 3, color_pal[4], "blue"))) %>% 
+leaflet() %>% 
+  addTiles() %>% 
+  addCircleMarkers(radius = ~ sqrt(Travel3$Total/1e2), opacity = 0, color = Travel3$color)
+```
+
+
+Column {data-width=200}
+----------------------------------
+
+###
+
+
+
 
 Summary {data-navmenu="Enrollment" data-orientation=rows}
 ======================================================================
