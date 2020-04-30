@@ -19,6 +19,7 @@ library(scales)
 library(leaflet)
 library(ggmap)
 library(RColorBrewer)
+library(tigris)
 ```
 
 ```{r setup, include=FALSE}
@@ -30,6 +31,8 @@ enroll <- read.csv("./input/Montgomery_College_Enrollment_Data.csv") %>%
   
 revenues <- read.csv("./input/Approved_Fiscal_Revenues.csv") %>% 
     filter(Fiscal_Year == 2019)
+
+options(tigris_use_cache = TRUE)
 ```
 
 ```{js}
@@ -56,46 +59,31 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
               fig.width = 10, fig.align = "center")
 ```
 
-Dashboard {data-orientation=rows}
-=====================================
+Travel
+======================================================================
 
 Sidebar {.sidebar}
 ----------------------------
 
 ### Summary
-Clearview Group performed an analysis of several open datasets from Montgomery County and Montgomery College. 
+Clearview Group performed an analysis Montgomery County Government employee non-local travel spend for the calendar year 2019. 
 
-Row 
------------------------------------------------------------------------
-###
-```{r}
-revenues %>%
-  summarise(Amount = paste(dollar(sum(Approved_Amount)/1e9),"B", sep = "")) %>% 
-  valueBox(caption = "2019 Gov. Revenue", icon = "fa-dollar", color = "grey")
-```
+Data was obtained from Montgomery County's open data portal: https://data.montgomerycountymd.gov/Government/Employee-Travel-Data-Non-Local-/kf2b-wnaq
 
-###
-```{r}
-travel %>% 
-  summarise(Amount = dollar(sum(Actual.Total.Expenses))) %>% 
-  valueBox(caption = "2019 Gov. Empl. Travel (Non-Local)", icon = "fa-dollar", color = "green")
-```
-
-###
-```{r}
-enroll %>%
-  summarise(Total = format(n(),big.mark = ",")) %>% 
-  valueBox(caption = "2015 Montgomery College Enrollment", icon = "fa-user-graduate", color = "blue")
-```
-
-
-Summary {data-navmenu="Travel"}
-======================================================================
 
 Column {data-width=200}
 ----------------------------------
 
+### Total Expenses
+
+```{r}
+travel %>% 
+  summarise(Amount = dollar(sum(Actual.Total.Expenses))) %>% 
+  valueBox(icon = "fa-dollar", color = "green")
+```
+
 ### Top 10 Departments
+
 ```{r}
 travel %>% 
   group_by(Department) %>% 
@@ -103,21 +91,26 @@ travel %>%
   arrange(-Amount) %>% 
   top_n(10) %>% 
   mutate(Amount = dollar(Amount)) %>% 
-  kable()
+   kable() %>% 
+   kable_styling(bootstrap_options = c("striped","hover", "condensed","responsive"),
+                 fixed_thead = TRUE)
+  
   
 ```
 
 Column {data-width=600}
 ----------------------------------
 
-###
+### Travel Spend Map
+
 ```{r}
 Travel1 <- travel %>%
             mutate(Dest = tolower(Destination.s.)) %>% 
             mutate(Dest = gsub(";.*","",Dest)) %>% 
             #mutate(Dest = gsub(" ,.*",",.*",Dest)) %>% 
             group_by(Dest) %>% 
-            summarise(Total = sum(Actual.Total.Expenses)) %>% 
+            summarise(Total = sum(Actual.Total.Expenses),
+                      Lines = n()) %>% 
             arrange(-Total)
 
 # Travel2 <- Travel1 %>% 
@@ -126,52 +119,204 @@ Travel1 <- travel %>%
 #   geocode() 
 # 
 # Travel3 <- Travel2 %>%
-#   cbind(Travel1) %>% 
+#   cbind(Travel1) %>%
 #   rename(lng = lon)
 # 
 # write_csv(Travel3, "./input/Travel_Geocoded.csv")
 
-Travel3 <- read_csv("./input/Travel_Geocoded.csv")
+Travel3 <- read_csv("./input/Travel_Geocoded.csv") %>% 
+  filter(!str_detect(Dest,"^city.*"))
 
-color_pal <- brewer.pal(5,"PuRd")
+color_pal <- brewer.pal(4,"YlOrRd")
 
 Travel3 %>% 
-mutate(zscore = (Total - mean(Total))/sd(Total)) %>% 
-mutate(color = ifelse(zscore > 5, color_pal[5],
-                      ifelse(zscore <= 5 & zscore > 3, color_pal[4], "blue"))) %>% 
+    group_by(lat,lng) %>% 
+      summarise(Total = sum(Total),
+                Dest = toupper(max(Dest)),
+                Lines = sum(Lines)) %>% 
+    mutate(color = ifelse(Total > 30000, color_pal[4],
+                          ifelse(Total <= 30000 & Total > 20000, color_pal[3], 
+                                 ifelse(Total <= 20000 & Total > 5000, color_pal[2],
+                                 color_pal[1])))) %>% 
+    mutate(Lbl = paste(Dest,
+                       paste("Amount:",dollar(Total)),
+                       paste("Trips:",Lines),
+                       sep = "\r\n")) %>% 
+    arrange(-Total) %>% 
 leaflet() %>% 
   addTiles() %>% 
-  addCircleMarkers(radius = ~ sqrt(Travel3$Total/1e2), opacity = 0, color = Travel3$color)
+  addCircleMarkers(radius = ~ Lines,
+                   opacity = 0,
+                   fillOpacity = .5,
+                   color = ~ color,
+                   stroke = TRUE,
+                   label = ~ Lbl)
 ```
 
 
 Column {data-width=200}
 ----------------------------------
 
-###
+### Total Trips
+
+```{r}
+travel %>% 
+  summarise(Trips = n()) %>% 
+  valueBox(icon = "fa-car", color = "blue")
+```
+
+
+### Top 10 Cities
+
+```{r}
+Travel3 %>% 
+    group_by(lat,lng) %>% 
+      summarise(Total = sum(Total),
+                Destination = toupper(max(Dest)),
+                Trips = sum(Lines)) %>%
+  ungroup() %>% 
+  arrange(-Total) %>% 
+  top_n(10) %>% 
+  mutate(Total = dollar(Total)) %>% 
+  select(Destination, Total, Trips) %>% 
+  kable() %>% 
+   kable_styling(bootstrap_options = c("striped","hover", "condensed","responsive"),
+                 fixed_thead = TRUE)
+  
+```
 
 
 
 
-Summary {data-navmenu="Enrollment" data-orientation=rows}
+Enrollment
 ======================================================================
 
-Row
+
+Sidebar {.sidebar}
+----------------------------
+
+### Summary
+Clearview Group performed an analysis Montgomery College's enrollment for the calendar year 2015. 
+
+Data was obtained from Montgomery County's open data portal: https://data.montgomerycountymd.gov/Education/Montgomery-College-Enrollment-Data/wmr2-6hn6
+
+
+Column {data-width=200}
 ----------------------------------
 
-###
+### Students
 
+```{r}
+enroll %>%
+  summarise(Total = format(n(),big.mark = ",")) %>% 
+  valueBox(icon = "fa-user-graduate", color = "blue")
+```
 
-Summary {data-navmenu="Revenues" data-orientation=rows}
-======================================================================
+### Top 10 Programs
 
-Row
+```{r}
+enroll %>% 
+  group_by(MC.Program.Description) %>% 
+  summarise(Students = n()) %>% 
+  arrange(-Students) %>% 
+  top_n(10) %>% 
+  rename(Program = MC.Program.Description) %>% 
+  kable(format.args = list(decimal.mark = '.', big.mark = ",")) %>% 
+   kable_styling(bootstrap_options = c("striped","hover", "condensed","responsive"),
+                 fixed_thead = TRUE)
+  
+  
+```
+
+Column {data-width=600}
 ----------------------------------
 
-###
+### Student Location Map
+
+```{r}
+enroll1 <- enroll %>% 
+            group_by(ZIP) %>% 
+            summarise(Students = n()) %>% 
+            arrange(-Students) %>% 
+            rename(zipcode = ZIP)
+
+# get zip boundaries that start with 282
+char_zips <- zctas(cb = TRUE, starts_with = "20")
+
+# join zip boundaries and income data 
+char_zips <- geo_join(char_zips, 
+                      enroll1, 
+                      by_sp = "GEOID10", 
+                      by_df = "zipcode",
+                      how = "inner")
+
+color_pal <- colorNumeric("YlOrRd",enroll1$Students)
 
 
+# create color palette 
+pal <- colorNumeric(
+  palette = "Greens",
+  domain = char_zips@data$Students)
 
+# create labels for zipcodes
+labels <- 
+  paste0(
+    "Zip Code: ",
+    char_zips@data$GEOID10, "<br/>",
+    "Students: ",
+    char_zips@data$Students) %>%
+  lapply(htmltools::HTML)
+
+char_zips %>% 
+  leaflet %>% 
+  # add base map
+  addProviderTiles("CartoDB") %>% 
+  # add zip codes
+  addPolygons(fillColor = ~color_pal(Students),
+              weight = 2,
+              opacity = 1,
+              color = "white",
+              dashArray = "3",
+              fillOpacity = 0.7,
+              highlight = highlightOptions(weight = 2,
+                                           color = "#666",
+                                           dashArray = "",
+                                           fillOpacity = 0.7,
+                                           bringToFront = TRUE),
+              label = labels) %>% 
+  
+  addAwesomeMarkers(lat = 39.097368,lng = -77.157735, 
+                    label = "Rockville Campus") %>% 
+  
+  # add legend
+  addLegend(pal = color_pal, 
+            values = ~Students, 
+            opacity = 0.7, 
+            title = htmltools::HTML("Students <br> 
+                                    by Zip Code <br>
+                                    2015"),
+            position = "bottomright")
+```
+
+
+Column {data-width=200}
+----------------------------------
+
+### Top 10 Zip Codes
+
+```{r}
+enroll %>% 
+  group_by(ZIP) %>% 
+  summarise(Students = n()) %>% 
+  arrange(-Students) %>% 
+  mutate("Zip Code" = as.character(ZIP)) %>% 
+  select(`Zip Code`, Students) %>% 
+  top_n(10) %>% 
+  kable(format.args = list(decimal.mark = '.', big.mark = ",")) %>% 
+   kable_styling(bootstrap_options = c("striped","hover", "condensed","responsive"),
+                 fixed_thead = TRUE)
+  
+```
 
 
 
